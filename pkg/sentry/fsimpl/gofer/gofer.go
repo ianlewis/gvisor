@@ -1230,8 +1230,10 @@ func (d *dentry) checkCachingLocked(ctx context.Context) {
 // destroyLocked destroys the dentry. It may flushes dirty pages from cache,
 // close p9 file and remove reference on parent dentry.
 //
-// Preconditions: d.fs.renameMu must be locked for writing. d.refs == 0. d is
-// not a child dentry.
+// Preconditions:
+// * d.fs.renameMu must be locked for writing.
+// * d.refs == 0.
+// * d is not a child dentry.
 func (d *dentry) destroyLocked(ctx context.Context) {
 	switch atomic.LoadInt64(&d.refs) {
 	case 0:
@@ -1363,7 +1365,9 @@ func (d *dentry) userXattrSupported() bool {
 	return filetype == linux.ModeRegular || filetype == linux.ModeDirectory
 }
 
-// Preconditions: !d.isSynthetic(). d.isRegularFile() || d.isDir().
+// Preconditions:
+// * !d.isSynthetic().
+// * d.isRegularFile() || d.isDir().
 func (d *dentry) ensureSharedHandle(ctx context.Context, read, write, trunc bool) error {
 	// O_TRUNC unconditionally requires us to obtain a new handle (opened with
 	// O_TRUNC).
