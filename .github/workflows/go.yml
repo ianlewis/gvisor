@@ -9,7 +9,7 @@ on:
 
 jobs:
   generate:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
     - id: setup
       run: |
