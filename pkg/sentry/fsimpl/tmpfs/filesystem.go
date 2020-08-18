@@ -320,7 +320,7 @@ func (fs *filesystem) OpenAt(ctx context.Context, rp *vfs.ResolvingPath, opts vf
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	if rp.Done() {
-		// Reject attempts to open directories with O_CREAT.
+		// Reject attempts to open mount root directory with O_CREAT.
 		if rp.MustBeDir() {
 			return nil, syserror.EISDIR
 		}
@@ -389,9 +389,8 @@ afterTrailingSymlink:
 		start = &parentDir.dentry
 		goto afterTrailingSymlink
 	}
-	// Open existing file.
-	if mustCreate {
-		return nil, syserror.EEXIST
+	if rp.MustBeDir() && !child.inode.isDir() {
+		return nil, syserror.ENOTDIR
 	}
 	return child.open(ctx, rp, &opts, false)
 }

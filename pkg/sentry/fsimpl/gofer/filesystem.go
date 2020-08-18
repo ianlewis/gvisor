@@ -844,6 +844,13 @@ func (fs *filesystem) OpenAt(ctx context.Context, rp *vfs.ResolvingPath, opts vf
 		}
 	}
 	if rp.Done() {
+		// Reject attempts to open mount root directory with O_CREAT.
+		if mayCreate && rp.MustBeDir() {
+			return nil, syserror.EISDIR
+		}
+		if mustCreate {
+			return nil, syserror.EEXIST
+		}
 		return start.openLocked(ctx, rp, &opts)
 	}
 
@@ -855,6 +862,10 @@ afterTrailingSymlink:
 	// Check for search permission in the parent directory.
 	if err := parent.checkPermissions(rp.Credentials(), vfs.MayExec); err != nil {
 		return nil, err
+	}
+	// Reject attempts to open directories with O_CREAT.
+	if mayCreate && rp.MustBeDir() {
+		return nil, syserror.EISDIR
 	}
 	// Determine whether or not we need to create a file.
 	parent.dirMu.Lock()
@@ -875,9 +886,6 @@ afterTrailingSymlink:
 	if mustCreate {
 		return nil, syserror.EEXIST
 	}
-	if !child.isDir() && rp.MustBeDir() {
-		return nil, syserror.ENOTDIR
-	}
 	// Open existing child or follow symlink.
 	if child.isSymlink() && rp.ShouldFollowSymlink() {
 		target, err := child.readlink(ctx, rp.Mount())
@@ -889,6 +897,9 @@ afterTrailingSymlink:
 		}
 		start = parent
 		goto afterTrailingSymlink
+	}
+	if rp.MustBeDir() && !child.isDir() {
+		return nil, syserror.ENOTDIR
 	}
 	return child.openLocked(ctx, rp, &opts)
 }
@@ -1071,10 +1082,8 @@ func (d *dentry) createAndOpenChildLocked(ctx context.Context, rp *vfs.Resolving
 	}
 	creds := rp.Credentials()
 	name := rp.Component()
-	// Filter file creation flags and O_LARGEFILE out; the create RPC already
-	// has the semantics of O_CREAT|O_EXCL, while some servers will choke on
-	// O_LARGEFILE.
-	createFlags := p9.OpenFlags(opts.Flags &^ (vfs.FileCreationFlags | linux.O_LARGEFILE))
+	// We only want the access mode for creating the file.
+	createFlags := p9.OpenFlags(opts.Flags) & p9.OpenFlagsModeMask
 	fdobj, openFile, createQID, _, err := dirfile.create(ctx, name, createFlags, (p9.FileMode)(opts.Mode), (p9.UID)(creds.EffectiveKUID), (p9.GID)(creds.EffectiveKGID))
 	if err != nil {
 		dirfile.close(ctx)
